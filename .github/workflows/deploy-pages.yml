@@ -6,14 +6,11 @@ on:
       - main
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
 concurrency:
   group: 'pages'
   cancel-in-progress: false
@@ -28,16 +25,17 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: 22
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+          else
+            npm install --legacy-peer-deps
+          fi
 
       - name: Build applet
-        # In GitHub Pages, if the repository is not a user/org root site (<user>.github.io),
-        # GITHUB_REPOSITORY (e.g. 'octocat/kimai-tracker') is used to inject the base subpath.
-        # If deploying to root domain/custom domain, base falls back to '/'
         run: |
           REPO_NAME="${GITHUB_REPOSITORY#*/}"
           if [[ "${GITHUB_REPOSITORY}" == *".github.io" ]]; then
