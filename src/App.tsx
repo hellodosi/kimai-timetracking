@@ -18,7 +18,6 @@ import { EncryptionService } from './services/crypto';
 import { KimaiApiService } from './services/kimaiApi';
 import { VaultUnlockSetupModal } from './components/VaultUnlockSetupModal';
 import { PinSetupModal } from './components/PinSetupModal';
-import { OfflineIndicator } from './components/OfflineIndicator';
 import { TimerCard } from './components/TimerCard';
 import { TimesheetHistoryView } from './components/TimesheetHistoryView';
 import { MetadataView } from './components/MetadataView';
@@ -408,16 +407,15 @@ export default function App() {
         <div className="max-w-4xl mx-auto px-3.5 py-2.5 sm:px-4 sm:py-3 flex items-center justify-between gap-2">
           {/* Logo & Brand */}
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-sky-600 to-cyan-500 shadow-md shadow-sky-500/20 flex items-center justify-center text-white shrink-0">
-              <Clock className="w-4 h-4 sm:w-5 sm:h-5" />
-            </div>
+            <img
+              src={`${import.meta.env.BASE_URL}pwa-192x192.png`}
+              alt="Zeiterfassung"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl shadow-md shadow-sky-950 shrink-0 object-contain"
+            />
             <div className="truncate">
               <h1 className="font-bold text-sm sm:text-base text-white tracking-tight leading-none truncate">
-                Kimai
+                Zeiterfassung
               </h1>
-              <span className="text-[10px] text-slate-400 leading-none">
-                {isPinSet ? 'Verschlüsselt' : 'Lokal'}
-              </span>
             </div>
           </div>
 
@@ -432,13 +430,21 @@ export default function App() {
               className={`flex items-center gap-1.5 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg border text-xs font-medium transition cursor-pointer active:scale-95 ${
                 serverStatus.isReachable
                   ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300'
-                  : 'bg-slate-900 border-slate-800 text-slate-300'
+                  : 'bg-amber-950/40 border-amber-800/60 text-amber-300'
               }`}
-              title="Server-Verbindung prüfen"
+              title={
+                serverStatus.isReachable
+                  ? 'Server verbunden (Online)'
+                  : 'Server nicht erreichbar (Offline) - Klicken zum Prüfen'
+              }
             >
               <div
                 className={`w-2 h-2 rounded-full shrink-0 ${
-                  serverStatus.isReachable ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'
+                  serverStatus.checking
+                    ? 'bg-amber-400 animate-ping'
+                    : serverStatus.isReachable
+                    ? 'bg-emerald-400 animate-pulse'
+                    : 'bg-amber-400'
                 }`}
               />
               <span className="text-[11px] font-medium hidden xs:inline">
@@ -449,9 +455,9 @@ export default function App() {
                   : 'Offline'}
               </span>
               <RefreshCw
-                className={`w-3 h-3 text-slate-400 ${
-                  serverStatus.checking ? 'animate-spin' : ''
-                }`}
+                className={`w-3 h-3 ${
+                  serverStatus.isReachable ? 'text-emerald-400/80' : 'text-amber-400/80'
+                } ${serverStatus.checking ? 'animate-spin' : ''}`}
               />
             </button>
 
@@ -478,16 +484,6 @@ export default function App() {
             </button>
           </div>
         </div>
-
-        {/* Offline & Sync Notification Banner */}
-        <OfflineIndicator
-          isOnline={isOnline}
-          serverStatus={serverStatus}
-          pendingSyncCount={pendingSyncCount}
-          isSyncing={isSyncing}
-          onCheckConnection={checkKimaiServer}
-          onSyncPending={() => syncPendingTimesheets()}
-        />
 
         {/* Sync Toast */}
         {syncFeedback && (
@@ -650,6 +646,13 @@ export default function App() {
           }}
           onPinStatusChanged={() => {
             setIsPinSet(StorageService.isPinSet());
+          }}
+          onClearOfflineCache={async () => {
+            const count = await StorageService.clearOfflineTimesheets(activePin);
+            const remaining = await StorageService.getTimesheets(activePin);
+            setTimesheets(remaining);
+            setActiveTimer(null);
+            return count;
           }}
         />
       )}

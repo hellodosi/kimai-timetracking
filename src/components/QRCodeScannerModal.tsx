@@ -6,7 +6,7 @@ import type { QRConfigPayload } from '../types/kimai';
 interface QRCodeScannerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onScanSuccess: (payload: { url: string; token: string }) => void;
+  onScanSuccess: (payload: { url: string; token: string; username?: string }) => void;
 }
 
 export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
@@ -120,13 +120,14 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({
       const data: QRConfigPayload = JSON.parse(rawText);
       const url = data.url || data.baseUrl || '';
       const token = data.token || data.apiToken || '';
+      const username = data.username || data.user || '';
 
       if (!url || !token) {
         setParseError('QR-Code enthält kein gültiges Kimai-JSON (URL und API-Token erforderlich).');
         return false;
       }
 
-      onScanSuccess({ url, token });
+      onScanSuccess({ url, token, username: username || undefined });
       onClose();
       return true;
     } catch {

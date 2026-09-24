@@ -1,5 +1,17 @@
 import React, { useState } from 'react';
-import { LogIn, KeyRound, Globe, QrCode, AlertCircle, Eye, EyeOff, ShieldCheck, ArrowRight } from 'lucide-react';
+import {
+  LogIn,
+  KeyRound,
+  Globe,
+  QrCode,
+  AlertCircle,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  ArrowRight,
+  User,
+  Info,
+} from 'lucide-react';
 import { QRCodeScannerModal } from './QRCodeScannerModal';
 import { StorageService } from '../services/storage';
 import { KimaiApiService } from '../services/kimaiApi';
@@ -18,8 +30,9 @@ export const VaultUnlockSetupModal: React.FC<VaultUnlockSetupModalProps> = ({
   onUnlocked,
   onLoginSuccess,
 }) => {
-  // Login form state (Only URL & Token)
+  // Login form state
   const [url, setUrl] = useState('');
+  const [username, setUsername] = useState('');
   const [apiToken, setApiToken] = useState('');
   const [showToken, setShowToken] = useState(false);
 
@@ -52,12 +65,13 @@ export const VaultUnlockSetupModal: React.FC<VaultUnlockSetupModalProps> = ({
     }
   };
 
-  // Handle initial login (Only URL + Token)
+  // Handle initial login / setup
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
     const cleanUrl = url.trim();
+    const cleanUsername = username.trim();
     const cleanToken = apiToken.trim();
 
     if (!cleanUrl) {
@@ -65,7 +79,7 @@ export const VaultUnlockSetupModal: React.FC<VaultUnlockSetupModalProps> = ({
       return;
     }
     if (!cleanToken) {
-      setErrorMsg('Bitte geben Sie Ihren Kimai API-Token ein.');
+      setErrorMsg('Bitte geben Sie Ihr API-Passwort / Token ein.');
       return;
     }
 
@@ -74,13 +88,14 @@ export const VaultUnlockSetupModal: React.FC<VaultUnlockSetupModalProps> = ({
       const newConfig: KimaiConfig = {
         baseUrl: cleanUrl,
         apiToken: cleanToken,
+        username: cleanUsername || undefined,
       };
 
       // Test connection if online, but do not block user if offline
       try {
         const pingResult = await KimaiApiService.ping(newConfig, 3000);
         if (pingResult.errorMessage && pingResult.errorMessage.includes('autorisiert')) {
-          // If server responded with 401/403, warn user about wrong token
+          // If server responded with 401/403, warn user about wrong credentials
           setErrorMsg(pingResult.errorMessage);
           setIsProcessing(false);
           return;
@@ -98,9 +113,10 @@ export const VaultUnlockSetupModal: React.FC<VaultUnlockSetupModalProps> = ({
     }
   };
 
-  const handleQRSuccess = (payload: { url: string; token: string }) => {
+  const handleQRSuccess = (payload: { url: string; token: string; username?: string }) => {
     setUrl(payload.url);
     if (payload.token) setApiToken(payload.token);
+    if (payload.username) setUsername(payload.username);
   };
 
   return (
@@ -108,17 +124,30 @@ export const VaultUnlockSetupModal: React.FC<VaultUnlockSetupModalProps> = ({
       <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl p-6 sm:p-8 text-slate-100 my-auto">
         {/* Top Header */}
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-sky-600 to-cyan-500 shadow-lg shadow-sky-500/20 text-white mb-3">
-            {isPinSet ? <KeyRound className="w-7 h-7" /> : <LogIn className="w-7 h-7" />}
-          </div>
-          <h2 className="text-xl font-bold text-white tracking-tight">
-            {isPinSet ? 'App entsperren' : 'Kimai Zeiterfassung'}
-          </h2>
-          <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
-            {isPinSet
-              ? 'Geben Sie Ihren Sicherheits-PIN ein, um Ihre Zeiterfassung zu öffnen.'
-              : 'Verbinden Sie Ihre Kimai-Instanz mit URL und API-Token.'}
-          </p>
+          {isConfigured && isPinSet ? (
+            <>
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-sky-600 to-cyan-500 shadow-lg shadow-sky-500/20 text-white mb-3">
+                <KeyRound className="w-7 h-7" />
+              </div>
+              <h2 className="text-xl font-bold text-white tracking-tight">App entsperren</h2>
+              <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
+                Geben Sie Ihren Sicherheits-PIN ein, um Ihre Zeiterfassung zu öffnen.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-950/80 border border-sky-800/60 text-sky-400 text-xs font-medium mb-3">
+                <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
+                <span>Sicherer lokaler Speicher</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight mb-2">
+                Verbinden Sie Ihre Kimai-Instanz
+              </h2>
+              <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
+                Geben Sie Ihre Zugangsdaten ein, um die mobile Zeiterfassung zu starten. Ihre Daten werden verschlüsselt gespeichert.
+              </p>
+            </>
+          )}
         </div>
 
         {errorMsg && (
@@ -171,10 +200,10 @@ export const VaultUnlockSetupModal: React.FC<VaultUnlockSetupModalProps> = ({
             </div>
           </form>
         ) : (
-          /* LOGIN FORM: ONLY URL & TOKEN */
+          /* SETUP / LOGIN FORM MATCHING SPEC */
           <form onSubmit={handleLoginSubmit} className="space-y-4">
-            {/* QR Code Scan Trigger */}
-            <div className="flex items-center justify-between p-3 rounded-xl bg-sky-950/40 border border-sky-800/40">
+            {/* Quick QR Code Scan Trigger */}
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-sky-950/40 border border-sky-800/40">
               <div className="flex items-center gap-2 text-xs text-sky-300">
                 <QrCode className="w-4 h-4 text-sky-400" />
                 <span>Schnelleinrichtung via QR-Code:</span>
@@ -182,7 +211,7 @@ export const VaultUnlockSetupModal: React.FC<VaultUnlockSetupModalProps> = ({
               <button
                 type="button"
                 onClick={() => setIsScannerOpen(true)}
-                className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium shadow-sm transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                className="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium shadow-sm transition active:scale-95 flex items-center gap-1 cursor-pointer"
               >
                 <QrCode className="w-3.5 h-3.5" />
                 Scannen
@@ -199,20 +228,35 @@ export const VaultUnlockSetupModal: React.FC<VaultUnlockSetupModalProps> = ({
                 type="text"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://kimai.ihre-domain.de"
+                placeholder="https://zeiterfassung.domain.de"
                 className="w-full text-xs py-2.5 px-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white placeholder:text-slate-600 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition font-mono"
               />
               <span className="text-[10px] text-slate-500 mt-1 block">
-                Vollständige Webadresse Ihrer Kimai-Instanz.
+                Die Basis-URL Ihrer Kimai-Installation (ohne /api)
               </span>
             </div>
 
-            {/* API Token */}
+            {/* Username / Email */}
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-sky-400" />
+                Benutzername oder E-Mail
+              </label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="max.mustermann"
+                className="w-full text-xs py-2.5 px-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white placeholder:text-slate-600 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition font-mono"
+              />
+            </div>
+
+            {/* API Password / Token */}
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <KeyRound className="w-3.5 h-3.5 text-sky-400" />
-                  API-Token
+                  API-Passwort / Token
                 </span>
                 <button
                   type="button"
@@ -227,22 +271,30 @@ export const VaultUnlockSetupModal: React.FC<VaultUnlockSetupModalProps> = ({
                 type={showToken ? 'text' : 'password'}
                 value={apiToken}
                 onChange={(e) => setApiToken(e.target.value)}
-                placeholder="API-Token aus Ihrem Kimai-Profil"
+                placeholder="••••••••••••••••"
                 className="w-full text-xs py-2.5 px-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white placeholder:text-slate-600 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition font-mono"
               />
               <span className="text-[10px] text-slate-500 mt-1 block">
-                Erstellbar in Kimai unter: Eigenes Profil → API-Zugriff.
+                Erstellen Sie ein API-Token in Ihrem Kimai-Profil unter API-Zugriff
               </span>
             </div>
 
             <button
               type="submit"
               disabled={isProcessing}
-              className="w-full mt-3 py-3 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-semibold text-sm shadow-md transition active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full mt-2 py-3 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-semibold text-sm shadow-md transition active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>{isProcessing ? 'Verbinde...' : 'Anmelden'}</span>
+              <span>{isProcessing ? 'Verbinde...' : 'Verbindung testen & speichern'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
+
+            {/* PWA Tip Card */}
+            <div className="mt-4 p-3.5 rounded-xl bg-sky-950/40 border border-sky-800/40 flex items-start gap-2.5 text-xs text-sky-300">
+              <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+              <span className="leading-relaxed">
+                Tipp: Sie können die App zum Startbildschirm hinzufügen (PWA), um sie wie eine native App auch offline zu nutzen.
+              </span>
+            </div>
           </form>
         )}
       </div>

@@ -15,6 +15,8 @@ import {
   Eye,
   EyeOff,
   ShieldOff,
+  Eraser,
+  User,
 } from 'lucide-react';
 import { QRCodeScannerModal } from './QRCodeScannerModal';
 import { StorageService } from '../services/storage';
@@ -30,6 +32,7 @@ interface SettingsModalProps {
   onLockSession: () => void;
   onCheckConnection: () => Promise<void>;
   onPinStatusChanged: () => void;
+  onClearOfflineCache: () => Promise<number>;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -42,8 +45,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onLockSession,
   onCheckConnection,
   onPinStatusChanged,
+  onClearOfflineCache,
 }) => {
   const [url, setUrl] = useState(config.baseUrl);
+  const [username, setUsername] = useState(config.username || '');
   const [apiToken, setApiToken] = useState(config.apiToken);
   const [showToken, setShowToken] = useState(false);
 
@@ -60,6 +65,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [copiedJson, setCopiedJson] = useState(false);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [showDeleteOfflineConfirm, setShowDeleteOfflineConfirm] = useState(false);
+  const [offlineDeleteSuccess, setOfflineDeleteSuccess] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -72,6 +80,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       const updated: KimaiConfig = {
         baseUrl: url.trim(),
         apiToken: apiToken.trim(),
+        username: username.trim() || undefined,
       };
       await onSaveConfig(updated);
       setSaveSuccess(true);
@@ -153,6 +162,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const exportJson = JSON.stringify(
     {
       url,
+      user: username.trim() || undefined,
       token: apiToken,
     },
     null,
@@ -234,22 +244,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center gap-1.5">
                 <Globe className="w-3.5 h-3.5 text-sky-400" />
-                Server-URL
+                Kimai Server-URL
               </label>
               <input
                 type="text"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://zeiterfassung.domain.de"
                 className="w-full text-xs py-2 px-3 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono focus:outline-none focus:border-sky-500"
               />
             </div>
 
-            {/* API Token */}
+            {/* Username / Email */}
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-sky-400" />
+                Benutzername oder E-Mail
+              </label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="max.mustermann"
+                className="w-full text-xs py-2 px-3 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono focus:outline-none focus:border-sky-500"
+              />
+            </div>
+
+            {/* API Password / Token */}
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <KeyRound className="w-3.5 h-3.5 text-sky-400" />
-                  API-Token
+                  API-Passwort / Token
                 </span>
                 <button
                   type="button"
@@ -264,6 +290,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 type={showToken ? 'text' : 'password'}
                 value={apiToken}
                 onChange={(e) => setApiToken(e.target.value)}
+                placeholder="••••••••••••••••"
                 className="w-full text-xs py-2 px-3 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono focus:outline-none focus:border-sky-500"
               />
             </div>
@@ -479,25 +506,136 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </pre>
           </div>
 
-          {/* Danger Zone: Reset */}
-          <div className="pt-4 border-t border-rose-950/40">
-            <button
-              type="button"
-              onClick={() => {
-                if (
-                  confirm(
-                    'Möchten Sie wirklich alle lokal gespeicherten Daten (inkl. noch nicht synchronisierter Zeiten) und Konfigurationen löschen?'
-                  )
-                ) {
-                  StorageService.clearAll();
-                  window.location.reload();
-                }
-              }}
-              className="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1.5 cursor-pointer"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              Alle lokalen Daten löschen
-            </button>
+          {/* Storage & Reset Section */}
+          <div className="pt-4 border-t border-slate-800 space-y-3.5">
+            <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+              Speicher & Bereinigung
+            </h3>
+
+            {offlineDeleteSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-950/50 border border-emerald-800/80 text-xs text-emerald-300 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span>{offlineDeleteSuccess}</span>
+              </div>
+            )}
+
+            {/* Option 1: Offline-Cache leeren */}
+            <div className="p-3.5 rounded-xl bg-slate-950/80 border border-amber-950/50 space-y-2.5">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-xs font-semibold text-amber-300">
+                  <Eraser className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Offline-Cache leeren</span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Löscht nur die lokal zwischengespeicherten Offline-Zeiteinträge, damit diese nicht an Kimai übertragen werden. Ihre Zugangsdaten (URL, Token, PIN) und Stammdaten bleiben vollständig erhalten.
+                </p>
+              </div>
+
+              {!showDeleteOfflineConfirm ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDeleteOfflineConfirm(true);
+                    setShowDeleteAllConfirm(false);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-amber-950/50 hover:bg-amber-900/60 border border-amber-800/70 text-amber-300 text-xs font-medium transition cursor-pointer flex items-center gap-1.5 active:scale-95"
+                >
+                  <Eraser className="w-3.5 h-3.5" />
+                  Offline-Cache löschen
+                </button>
+              ) : (
+                <div className="p-3 rounded-lg bg-amber-950/60 border border-amber-800 space-y-2.5">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-200">
+                      Offline erfasste Zeiten wirklich verwerfen? Diese Einträge werden nicht mehr an Kimai übertragen.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const count = await onClearOfflineCache();
+                        setShowDeleteOfflineConfirm(false);
+                        setOfflineDeleteSuccess(
+                          count > 0
+                            ? `${count} Offline-Zeiteintrag/Einträge gelöscht.`
+                            : 'Offline-Cache wurde geleert (keine offenen Zeiten vorhanden).'
+                        );
+                        setTimeout(() => setOfflineDeleteSuccess(null), 4000);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold shadow-sm transition active:scale-95 cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Eraser className="w-3.5 h-3.5" />
+                      Ja, Offline-Zeiten löschen
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteOfflineConfirm(false)}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition cursor-pointer"
+                    >
+                      Abbrechen
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Option 2: Alles löschen (Werkszustand) */}
+            <div className="p-3.5 rounded-xl bg-slate-950/80 border border-rose-950/60 space-y-2.5">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-xs font-semibold text-rose-300">
+                  <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Alles löschen (Werkszustand)</span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Löscht wirklich alles unwiderruflich vom Gerät (Server-URL, API-Token, PIN, alle Offline-Zeiten und Stammdaten). Die PWA befindet sich danach wieder im Auslieferungszustand.
+                </p>
+              </div>
+
+              {!showDeleteAllConfirm ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDeleteAllConfirm(true);
+                    setShowDeleteOfflineConfirm(false);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-rose-950/50 hover:bg-rose-900/60 border border-rose-800/70 text-rose-300 text-xs font-medium transition cursor-pointer flex items-center gap-1.5 active:scale-95"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Alles löschen (Werkszustand)
+                </button>
+              ) : (
+                <div className="p-3 rounded-lg bg-rose-950/60 border border-rose-800 space-y-2.5">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <p className="text-xs text-rose-200">
+                      Möchten Sie die gesamte PWA wirklich auf den Werkszustand zurücksetzen? Alle Einstellungen, Anmeldedaten und Daten gehen unwiderruflich verloren.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        StorageService.clearAll();
+                        window.location.reload();
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-sm transition active:scale-95 cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Ja, Werkszustand wiederherstellen
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteAllConfirm(false)}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition cursor-pointer"
+                    >
+                      Abbrechen
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -518,6 +656,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         onScanSuccess={(p) => {
           setUrl(p.url);
           if (p.token) setApiToken(p.token);
+          if (p.username) setUsername(p.username);
         }}
       />
     </div>

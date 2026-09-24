@@ -266,7 +266,20 @@ export class StorageService {
   }
 
   /**
-   * Complete reset of all local data
+   * Clears only offline captured timesheets (pending or failed sync) and active timer.
+   * Retains configuration, PIN encryption, and cached metadata.
+   */
+  static async clearOfflineTimesheets(pin?: string): Promise<number> {
+    const timesheets = await this.getTimesheets(pin);
+    const syncedOnly = timesheets.filter((t) => t.syncStatus === 'synced');
+    const removedCount = timesheets.length - syncedOnly.length;
+    await this.saveTimesheets(syncedOnly, pin);
+    await this.saveActiveTimer(null, pin);
+    return removedCount;
+  }
+
+  /**
+   * Complete reset of all local data (factory reset)
    */
   static clearAll(): void {
     localStorage.removeItem(STORAGE_KEYS.VAULT_CHECK);
