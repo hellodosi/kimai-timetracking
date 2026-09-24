@@ -1,0 +1,6 @@
+{
+  "name": "Kimai Offline Time Tracker",
+  "description": "Universelle PWA für Kimai Zeiterfassung mit automatischer Hintergrund-Synchronisation und optionaler lokaler Verschlüsselung.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
