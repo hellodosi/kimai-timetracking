@@ -7,14 +7,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Clock,
   CheckCircle2,
-  Folder,
   Database,
   Lock,
   Settings,
   RefreshCw,
-  Plus,
-  ShieldCheck,
-  Building2,
   ListTodo,
 } from 'lucide-react';
 import { StorageService } from './services/storage';
@@ -406,52 +402,50 @@ export default function App() {
   ).length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      {/* Top Application Header */}
-      <header className="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          {/* Logo & Title */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-600 to-cyan-500 shadow-md shadow-sky-500/20 flex items-center justify-center text-white shrink-0">
-              <Clock className="w-5 h-5" />
+    <div className="h-full w-full flex flex-col bg-slate-950 text-slate-100 font-sans overflow-hidden select-none">
+      {/* Top Application Navigation Bar with Safe Area Top Padding */}
+      <header className="shrink-0 bg-slate-900/95 backdrop-blur-md border-b border-slate-800/80 pt-safe z-30">
+        <div className="max-w-4xl mx-auto px-3.5 py-2.5 sm:px-4 sm:py-3 flex items-center justify-between gap-2">
+          {/* Logo & Brand */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-sky-600 to-cyan-500 shadow-md shadow-sky-500/20 flex items-center justify-center text-white shrink-0">
+              <Clock className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <h1 className="font-bold text-sm sm:text-base text-white tracking-tight leading-none">
-                Kimai Zeiterfassung
+            <div className="truncate">
+              <h1 className="font-bold text-sm sm:text-base text-white tracking-tight leading-none truncate">
+                Kimai
               </h1>
               <span className="text-[10px] text-slate-400 leading-none">
-                {isPinSet ? 'PIN-Schutz aktiv' : 'Lokal gespeichert'}
+                {isPinSet ? 'Verschlüsselt' : 'Lokal'}
               </span>
             </div>
           </div>
 
-          {/* Action Badges */}
-          <div className="flex items-center gap-2">
+          {/* Action Items in Header */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <PWAInstallButton />
 
-            {/* Server Reachability Status Pill */}
+            {/* Server Reachability Badge */}
             <button
               onClick={() => checkKimaiServer()}
               disabled={serverStatus.checking}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-lg border text-xs font-medium transition cursor-pointer active:scale-95 ${
                 serverStatus.isReachable
-                  ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300 hover:bg-emerald-900/50'
-                  : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
+                  ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300'
+                  : 'bg-slate-900 border-slate-800 text-slate-300'
               }`}
-              title="Klicken, um Verbindung zum Server zu prüfen"
+              title="Server-Verbindung prüfen"
             >
               <div
-                className={`w-2 h-2 rounded-full ${
-                  serverStatus.isReachable
-                    ? 'bg-emerald-400'
-                    : 'bg-slate-400'
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  serverStatus.isReachable ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'
                 }`}
               />
-              <span className="hidden sm:inline">
+              <span className="text-[11px] font-medium hidden xs:inline">
                 {serverStatus.checking
                   ? 'Prüfe...'
                   : serverStatus.isReachable
-                  ? 'Verbunden'
+                  ? 'Online'
                   : 'Offline'}
               </span>
               <RefreshCw
@@ -461,12 +455,13 @@ export default function App() {
               />
             </button>
 
-            {/* Lock Button (if PIN set) */}
+            {/* Lock Button (only if PIN set) */}
             {isPinSet && (
               <button
                 onClick={handleLockSession}
-                className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition border border-slate-700/60 cursor-pointer"
-                title="App mit PIN sperren"
+                className="p-1.5 sm:p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition border border-slate-700/60 active:scale-95 cursor-pointer"
+                title="App sperren"
+                aria-label="App sperren"
               >
                 <Lock className="w-4 h-4 text-sky-400" />
               </button>
@@ -475,15 +470,16 @@ export default function App() {
             {/* Settings Button */}
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition border border-slate-700/60 cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition border border-slate-700/60 active:scale-95 cursor-pointer"
               title="Einstellungen"
+              aria-label="Einstellungen"
             >
               <Settings className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Offline Banner & Connectivity Indicator */}
+        {/* Offline & Sync Notification Banner */}
         <OfflineIndicator
           isOnline={isOnline}
           serverStatus={serverStatus}
@@ -493,77 +489,27 @@ export default function App() {
           onSyncPending={() => syncPendingTimesheets()}
         />
 
-        {/* Sync Success Feedback Toast */}
+        {/* Sync Toast */}
         {syncFeedback && (
-          <div className="bg-emerald-950/90 border-b border-emerald-800 px-4 py-2 text-xs text-emerald-200 flex items-center justify-between">
+          <div className="bg-emerald-950/95 border-b border-emerald-800 px-4 py-1.5 text-xs text-emerald-200 flex items-center justify-between">
             <span className="flex items-center gap-1.5 font-medium">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               {syncFeedback}
             </span>
             <button
               onClick={() => setSyncFeedback(null)}
-              className="text-emerald-400 hover:text-emerald-200 cursor-pointer"
+              className="text-emerald-400 hover:text-emerald-200 p-1 text-xs cursor-pointer"
             >
               ✕
             </button>
           </div>
         )}
-
-        {/* Navigation Tabs */}
-        <div className="max-w-4xl mx-auto px-4 flex border-t border-slate-800/60">
-          <button
-            onClick={() => setActiveTab('tracker')}
-            className={`flex items-center gap-2 py-3 px-4 text-xs font-semibold border-b-2 transition relative cursor-pointer ${
-              activeTab === 'tracker'
-                ? 'border-sky-500 text-sky-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Clock className="w-4 h-4" />
-            <span>Zeiterfassung</span>
-            {activeTimer && (
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping absolute right-2 top-3" />
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('timesheets')}
-            className={`flex items-center gap-2 py-3 px-4 text-xs font-semibold border-b-2 transition relative cursor-pointer ${
-              activeTab === 'timesheets'
-                ? 'border-sky-500 text-sky-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <ListTodo className="w-4 h-4" />
-            <span>Zeiteinträge</span>
-            {pendingSyncCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
-                {pendingSyncCount}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('metadata')}
-            className={`flex items-center gap-2 py-3 px-4 text-xs font-semibold border-b-2 transition cursor-pointer ${
-              activeTab === 'metadata'
-                ? 'border-sky-500 text-sky-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Database className="w-4 h-4" />
-            <span>Stammdaten</span>
-            <span className="text-[10px] text-slate-500 hidden sm:inline">
-              ({metadata.projects.length} Projekte)
-            </span>
-          </button>
-        </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 pb-20">
+      {/* Main Content Area - Native Scrollable Container with Hidden Scrollbars */}
+      <main className="flex-1 overflow-y-auto no-scrollbar overscroll-contain w-full max-w-4xl mx-auto p-3.5 sm:p-6">
         {activeTab === 'tracker' && (
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             <TimerCard
               activeTimer={activeTimer}
               projects={metadata.projects}
@@ -575,21 +521,21 @@ export default function App() {
               onStopTimer={handleStopTimer}
             />
 
-            {/* Quick summary of today's work */}
-            <div className="rounded-2xl bg-slate-900/60 border border-slate-800/80 p-5 space-y-3">
+            {/* Quick Summary Pill */}
+            <div className="rounded-2xl bg-slate-900/50 border border-slate-800/80 p-4 space-y-1.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-white flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-sky-400" />
-                  Synchronisations-Status
+                <span className="font-medium text-slate-300 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-sky-400" />
+                  Synchronisation
                 </span>
                 <span className="text-slate-400 font-mono text-[11px]">
                   {pendingSyncCount > 0
-                    ? `${pendingSyncCount} ${pendingSyncCount === 1 ? 'Eintrag' : 'Einträge'} ausstehend`
-                    : 'Alle Einträge synchronisiert'}
+                    ? `${pendingSyncCount} ausstehend`
+                    : 'Alle Zeiten aktuell'}
                 </span>
               </div>
-              <p className="text-xs text-slate-400">
-                Sie können die Zeiterfassung jederzeit starten und beenden. Die Daten werden offline zurückgehalten und automatisch gesendet, sobald der Server wieder erreichbar ist.
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Zeiten werden lokal vorgehalten und automatisch synchronisiert, sobald Kimai erreichbar ist.
               </p>
             </div>
           </div>
@@ -618,6 +564,62 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* Native Bottom App Bar (Optimized for Mobile Thumb Navigation & Safe Area) */}
+      <nav className="shrink-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800/80 pb-safe z-30">
+        <div className="max-w-md mx-auto grid grid-cols-3 px-2 py-1">
+          {/* Tab 1: Timer */}
+          <button
+            onClick={() => setActiveTab('tracker')}
+            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition cursor-pointer active:scale-95 relative ${
+              activeTab === 'tracker'
+                ? 'text-sky-400 font-semibold'
+                : 'text-slate-400 hover:text-slate-200 font-normal'
+            }`}
+          >
+            <div className="relative">
+              <Clock className="w-5 h-5" />
+              {activeTimer && (
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping absolute -top-0.5 -right-1" />
+              )}
+            </div>
+            <span className="text-[11px] mt-1 tracking-tight">Erfassung</span>
+          </button>
+
+          {/* Tab 2: Timesheets */}
+          <button
+            onClick={() => setActiveTab('timesheets')}
+            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition cursor-pointer active:scale-95 relative ${
+              activeTab === 'timesheets'
+                ? 'text-sky-400 font-semibold'
+                : 'text-slate-400 hover:text-slate-200 font-normal'
+            }`}
+          >
+            <div className="relative">
+              <ListTodo className="w-5 h-5" />
+              {pendingSyncCount > 0 && (
+                <span className="absolute -top-1 -right-2 px-1.5 py-0.2 bg-amber-500 text-slate-950 font-black rounded-full text-[9px]">
+                  {pendingSyncCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[11px] mt-1 tracking-tight">Einträge</span>
+          </button>
+
+          {/* Tab 3: Stammdaten */}
+          <button
+            onClick={() => setActiveTab('metadata')}
+            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition cursor-pointer active:scale-95 relative ${
+              activeTab === 'metadata'
+                ? 'text-sky-400 font-semibold'
+                : 'text-slate-400 hover:text-slate-200 font-normal'
+            }`}
+          >
+            <Database className="w-5 h-5" />
+            <span className="text-[11px] mt-1 tracking-tight">Stammdaten</span>
+          </button>
+        </div>
+      </nav>
 
       {/* Manual Entry Modal */}
       <ManualEntryModal
