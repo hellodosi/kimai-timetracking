@@ -5,7 +5,12 @@ import {defineConfig} from 'vite';
 import {VitePWA} from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
-  const base = process.env.BASE_URL || './';
+  // Configurable base URL:
+  // - Defaults to './' (relative) so the PWA and all assets work universally on root domains AND any subdirectory without rebuilding!
+  // - Can be overridden via BASE_URL or VITE_BASE_URL (e.g. '/' for pure root, or '/subfolder/')
+  const base = process.env.BASE_URL || process.env.VITE_BASE_URL || './';
+  const manifestStartUrl = base === '/' ? '/' : './';
+  const manifestScope = base === '/' ? '/' : './';
 
   return {
     base,
@@ -22,8 +27,8 @@ export default defineConfig(() => {
           theme_color: '#0284c7',
           background_color: '#0f172a',
           display: 'standalone',
-          start_url: './',
-          scope: './',
+          start_url: manifestStartUrl,
+          scope: manifestScope,
           icons: [
             {
               src: 'pwa-192x192.png',
@@ -56,7 +61,7 @@ export default defineConfig(() => {
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve('.'),
       },
     },
     server: {

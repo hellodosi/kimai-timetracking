@@ -5,6 +5,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Basis-Pfad für den Build (Standard "./" für universelle Portabilität auf Hauptdomain & Unterverzeichnis)'
+        required: false
+        default: './'
 
 permissions:
   contents: read
@@ -37,14 +42,15 @@ jobs:
 
       - name: Build applet
         run: |
-          REPO_NAME="${GITHUB_REPOSITORY#*/}"
-          if [[ "${GITHUB_REPOSITORY}" == *".github.io" ]]; then
-            export BASE_URL="/"
-          else
-            export BASE_URL="/${REPO_NAME}/"
+          # 1. Manuelle Workflow-Eingabe (falls per Hand gestartet)
+          # 2. Repository-Variable 'BASE_URL' (falls in GitHub Settings > Secrets and Variables hinterlegt)
+          # 3. Standard './' (relativ): Funktioniert automatisch sowohl auf der Hauptdomain als auch in Unterverzeichnissen
+          BASE="${{ inputs.base_url || vars.BASE_URL }}"
+          if [ -z "$BASE" ]; then
+            BASE="./"
           fi
-          echo "Building with BASE_URL=${BASE_URL}"
-          npm run build -- --base="${BASE_URL}"
+          echo "Building PWA with base path: ${BASE}"
+          npm run build -- --base="${BASE}"
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
