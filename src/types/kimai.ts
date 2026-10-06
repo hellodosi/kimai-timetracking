@@ -57,6 +57,7 @@ export interface ActiveTimer {
   localId: string;
   remoteId?: number;
   begin: string;
+  startTimestamp?: number;
   projectId: number;
   projectName: string;
   customerName?: string;

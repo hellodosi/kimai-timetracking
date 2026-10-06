@@ -65,7 +65,17 @@ export const TimerCard: React.FC<TimerCardProps> = ({
     }
 
     const calcElapsed = () => {
-      const startMs = new Date(activeTimer.begin).getTime();
+      let startMs = activeTimer.startTimestamp;
+      if (!startMs && activeTimer.localId.startsWith('timer_')) {
+        const idTimestamp = Number(activeTimer.localId.replace('timer_', ''));
+        if (!isNaN(idTimestamp) && idTimestamp > 0) {
+          startMs = idTimestamp;
+        }
+      }
+      if (!startMs) {
+        startMs = new Date(activeTimer.begin).getTime();
+      }
+
       const nowMs = Date.now();
       const diffSec = Math.max(0, Math.floor((nowMs - startMs) / 1000));
       setElapsedSeconds(diffSec);
@@ -124,10 +134,17 @@ export const TimerCard: React.FC<TimerCardProps> = ({
       {activeTimer ? (
         <div className="p-6 sm:p-8 bg-gradient-to-b from-sky-950/40 via-slate-900 to-slate-900">
           <div className="flex items-center justify-between gap-3 mb-4">
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              Zeiterfassung läuft
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                Zeiterfassung läuft
+              </span>
+              {activeTimer.remoteId && (
+                <span className="px-2 py-0.5 rounded-full bg-sky-950/80 border border-sky-800/60 text-sky-300 text-[10px] font-medium hidden sm:inline-flex items-center gap-1">
+                  Server aktiv #{activeTimer.remoteId}
+                </span>
+              )}
+            </div>
 
             <span className="text-xs text-slate-400 font-mono">
               Gestartet: {new Date(activeTimer.begin).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

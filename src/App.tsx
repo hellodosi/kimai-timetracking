@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Clock,
   CheckCircle2,
@@ -12,10 +12,11 @@ import {
   Settings,
   RefreshCw,
   ListTodo,
+  X,
 } from 'lucide-react';
 import { StorageService } from './services/storage';
 import { EncryptionService } from './services/crypto';
-import { KimaiApiService } from './services/kimaiApi';
+import { KimaiApiService, formatKimaiDateTime } from './services/kimaiApi';
 import { VaultUnlockSetupModal } from './components/VaultUnlockSetupModal';
 import { PinSetupModal } from './components/PinSetupModal';
 import { TimerCard } from './components/TimerCard';
@@ -56,6 +57,8 @@ export default function App() {
   // Core application data
   const [config, setConfig] = useState<KimaiConfig | null>(null);
   const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
+  const activeTimerRef = useRef<ActiveTimer | null>(activeTimer);
+  activeTimerRef.current = activeTimer;
   const [timesheets, setTimesheets] = useState<TimesheetEntry[]>([]);
   const [metadata, setMetadata] = useState<CachedMetadata>({
     customers: [],
@@ -84,19 +87,134 @@ export default function App() {
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [isPinPromptOpen, setIsPinPromptOpen] = useState(false);
 
-  // Network listener
+  // Network listener & visibility sync
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
+    const handleOnline = () => {
+      setIsOnline(true);
+      checkKimaiServer();
+    };
     const handleOffline = () => setIsOnline(false);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkKimaiServer();
+      }
+    };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Periodic sync every 25 seconds to keep active timer state in sync with PC / Kimai
+    const interval = setInterval(() => {
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        checkKimaiServer();
+      }
+    }, 25000);
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
     };
-  }, []);
+  }, [config]);
+
+  // Synchronize active running timer from Kimai server (e.g. started on PC)
+  const syncActiveTimerFromKimai = useCallback(
+    async (cfgToUse?: KimaiConfig, metaToUse?: CachedMetadata) => {
+      const cfg = cfgToUse || config;
+      if (!cfg || !cfg.baseUrl) return;
+      const currentMeta = metaToUse || metadata;
+
+      try {
+        const activeList = await KimaiApiService.fetchActiveTimesheets(cfg);
+        if (Array.isArray(activeList) && activeList.length > 0) {
+          const item = activeList[0];
+
+          // If local active timer already represents this remote timer, don't overwrite or notify
+          const currentLocal = activeTimerRef.current;
+          if (currentLocal && Number(currentLocal.remoteId) === Number(item.id)) {
+            return;
+          }
+
+          let projectId = 0;
+          let projectName = 'Projekt';
+          let customerName = '';
+
+          if (typeof item.project === 'object' && item.project) {
+            projectId = item.project.id;
+            projectName = item.project.name || `Projekt #${projectId}`;
+            if (item.project.customer && typeof item.project.customer === 'object') {
+              customerName = item.project.customer.name || '';
+            }
+          } else if (typeof item.project === 'number') {
+            projectId = item.project;
+            const p = currentMeta.projects.find((proj) => proj.id === projectId);
+            if (p) {
+              projectName = p.name;
+              const c = currentMeta.customers.find((cust) => cust.id === (typeof p.customer === 'object' ? p.customer.id : p.customer));
+              if (c) customerName = c.name;
+            }
+          }
+
+          let activityId = 0;
+          let activityName = 'Tätigkeit';
+          if (typeof item.activity === 'object' && item.activity) {
+            activityId = item.activity.id;
+            activityName = item.activity.name || `Tätigkeit #${activityId}`;
+          } else if (typeof item.activity === 'number') {
+            activityId = item.activity;
+            const a = currentMeta.activities.find((act) => act.id === activityId);
+            if (a) activityName = a.name;
+          }
+
+          const tags: string[] = [];
+          if (Array.isArray(item.tags)) {
+            for (const t of item.tags) {
+              if (typeof t === 'string') tags.push(t);
+              else if (t && typeof t === 'object' && t.name) tags.push(t.name);
+            }
+          } else if (typeof item.tags === 'string' && item.tags.trim()) {
+            tags.push(...item.tags.split(',').map((s: string) => s.trim()).filter(Boolean));
+          }
+
+          const startMs = new Date(item.begin).getTime();
+          const remoteActiveTimer: ActiveTimer = {
+            localId: 'kimai_' + item.id,
+            remoteId: item.id,
+            begin: formatKimaiDateTime(item.begin),
+            startTimestamp: isNaN(startMs) ? Date.now() : startMs,
+            projectId,
+            projectName,
+            customerName,
+            activityId,
+            activityName,
+            description: item.description || '',
+            tags,
+            billable: Boolean(item.billable ?? true),
+            isRunning: true,
+          };
+
+          setActiveTimer(remoteActiveTimer);
+          await StorageService.saveActiveTimer(remoteActiveTimer, activePin);
+        } else {
+          // If Kimai server reports NO active timer running:
+          // Check if local active timer had a remoteId (was started on/synced with Kimai)
+          // That means user stopped it externally / on PC!
+          if (activeTimer && activeTimer.remoteId) {
+            setActiveTimer(null);
+            await StorageService.saveActiveTimer(null, activePin);
+            setSyncFeedback('Timer wurde am PC beendet.');
+            setTimeout(() => setSyncFeedback(null), 3000);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not sync active timer from Kimai:', err);
+      }
+    },
+    [config, activeTimer, activePin, metadata]
+  );
 
   // Check Kimai server reachability
   const checkKimaiServer = useCallback(
@@ -108,6 +226,9 @@ export default function App() {
       try {
         const status = await KimaiApiService.ping(cfg);
         setServerStatus(status);
+        if (status.isReachable) {
+          syncActiveTimerFromKimai(cfg);
+        }
         return status;
       } catch (err: unknown) {
         setServerStatus({
@@ -119,7 +240,7 @@ export default function App() {
         return { isReachable: false, checking: false, lastChecked: Date.now() };
       }
     },
-    [config]
+    [config, syncActiveTimerFromKimai]
   );
 
   // Sync pending timesheets with Kimai API
@@ -155,6 +276,7 @@ export default function App() {
             updated[idx] = {
               ...updated[idx],
               remoteId: response.id,
+              end: response.adjustedEnd || updated[idx].end,
               syncStatus: 'synced',
               syncError: undefined,
               updatedAt: Date.now(),
@@ -250,13 +372,14 @@ export default function App() {
             if (!loadedMeta || !loadedMeta.lastSyncedAt || loadedMeta.projects.length === 0) {
               await refreshMetadataFromKimai(loadedConfig);
             }
+            await syncActiveTimerFromKimai(loadedConfig, loadedMeta);
           }
         }
       } catch (err) {
         console.error('Failed to load local app data:', err);
       }
     },
-    [checkKimaiServer, syncPendingTimesheets, refreshMetadataFromKimai]
+    [checkKimaiServer, syncPendingTimesheets, refreshMetadataFromKimai, syncActiveTimerFromKimai]
   );
 
   // Auto-load data if configured and not PIN protected
@@ -315,10 +438,12 @@ export default function App() {
       }
     }
 
-    const beginIso = new Date().toISOString().replace('Z', '');
+    const now = Date.now();
+    const beginIso = formatKimaiDateTime(new Date(now));
     const newTimer: ActiveTimer = {
-      localId: 'timer_' + Date.now(),
+      localId: 'timer_' + now,
       begin: beginIso,
+      startTimestamp: now,
       projectId: params.projectId,
       projectName: proj ? proj.name : `Projekt #${params.projectId}`,
       customerName,
@@ -330,6 +455,27 @@ export default function App() {
       isRunning: true,
     };
 
+    // If server reachable, immediately launch timer on Kimai so it's running live on PC!
+    if (serverStatus.isReachable && config) {
+      try {
+        const remoteRes = await KimaiApiService.startTimesheet(config, {
+          begin: beginIso,
+          project: params.projectId,
+          activity: params.activityId,
+          description: params.description,
+          tags: params.tags,
+          billable: params.billable,
+        });
+        if (remoteRes?.id) {
+          newTimer.remoteId = remoteRes.id;
+          setSyncFeedback('Timer auf Server gestartet.');
+          setTimeout(() => setSyncFeedback(null), 3000);
+        }
+      } catch (err: unknown) {
+        console.warn('Konnte Timer nicht sofort auf Kimai starten:', err);
+      }
+    }
+
     setActiveTimer(newTimer);
     await StorageService.saveActiveTimer(newTimer, activePin);
   };
@@ -337,13 +483,46 @@ export default function App() {
   const handleStopTimer = async () => {
     if (!activeTimer) return;
 
-    const endIso = new Date().toISOString().replace('Z', '');
+    const now = Date.now();
+    let startMs = activeTimer.startTimestamp;
+    if (!startMs && activeTimer.localId.startsWith('timer_')) {
+      const idTimestamp = Number(activeTimer.localId.replace('timer_', ''));
+      if (!isNaN(idTimestamp) && idTimestamp > 0) {
+        startMs = idTimestamp;
+      }
+    }
+    if (!startMs) {
+      startMs = new Date(activeTimer.begin).getTime();
+    }
+    const startDt = new Date(startMs);
+    let endDt = new Date(now);
+    // Ensure duration is at least 60 seconds (1 minute) so Kimai validator does not reject 0-second timers
+    if (endDt.getTime() <= startDt.getTime() + 60000) {
+      endDt = new Date(startDt.getTime() + 60000);
+    }
+    const beginIso = formatKimaiDateTime(startDt);
+    const endIso = formatKimaiDateTime(endDt);
+
+    let stoppedRemote = false;
+    let remoteRecord: any = null;
+
+    // If timer was running on Kimai and server is reachable, stop it directly on Kimai!
+    if (activeTimer.remoteId && serverStatus.isReachable && config) {
+      try {
+        remoteRecord = await KimaiApiService.stopTimesheet(config, activeTimer.remoteId);
+        stoppedRemote = true;
+        setSyncFeedback('Timer auf Server gestoppt & gespeichert.');
+        setTimeout(() => setSyncFeedback(null), 3000);
+      } catch (err) {
+        console.warn('Fehler beim Stoppen auf Kimai-Server:', err);
+      }
+    }
 
     const completedEntry: TimesheetEntry = {
       localId: activeTimer.localId,
       remoteId: activeTimer.remoteId,
-      begin: activeTimer.begin,
-      end: endIso,
+      begin: remoteRecord?.begin ? formatKimaiDateTime(remoteRecord.begin) : beginIso,
+      end: remoteRecord?.end ? formatKimaiDateTime(remoteRecord.end) : endIso,
       projectId: activeTimer.projectId,
       projectName: activeTimer.projectName,
       customerName: activeTimer.customerName,
@@ -352,9 +531,9 @@ export default function App() {
       description: activeTimer.description,
       tags: activeTimer.tags,
       billable: activeTimer.billable,
-      syncStatus: 'pending',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      syncStatus: stoppedRemote ? 'synced' : 'pending',
+      createdAt: now,
+      updatedAt: now,
     };
 
     const updatedTimesheets = [completedEntry, ...timesheets];
@@ -364,8 +543,8 @@ export default function App() {
     await StorageService.saveActiveTimer(null, activePin);
     await StorageService.saveTimesheets(updatedTimesheets, activePin);
 
-    // If Kimai server is reachable, auto-push immediately
-    if (serverStatus.isReachable && config) {
+    // If not stopped on Kimai remotely (e.g. was offline or created offline), sync via postCompletedTimesheet
+    if (!stoppedRemote && serverStatus.isReachable && config) {
       syncPendingTimesheets(updatedTimesheets, config);
     }
   };
@@ -374,8 +553,16 @@ export default function App() {
   const handleSaveManualEntry = async (
     entryData: Omit<TimesheetEntry, 'localId' | 'createdAt' | 'updatedAt' | 'syncStatus'>
   ) => {
+    const startDt = new Date(entryData.begin);
+    let endDt = new Date(entryData.end || new Date());
+    if (endDt.getTime() <= startDt.getTime()) {
+      endDt = new Date(startDt.getTime() + 60000);
+    }
+
     const newEntry: TimesheetEntry = {
       ...entryData,
+      begin: formatKimaiDateTime(startDt),
+      end: formatKimaiDateTime(endDt),
       localId: 'entry_' + Date.now(),
       syncStatus: 'pending',
       createdAt: Date.now(),
@@ -481,23 +668,30 @@ export default function App() {
             </button>
           </div>
         </div>
+      </header>
 
-        {/* Sync Toast */}
+      {/* Floating Non-Intrusive Toast (Zero Layout Shift) */}
+      <div
+        className={`fixed top-14 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 pointer-events-none ${
+          syncFeedback
+            ? 'opacity-100 translate-y-0 scale-100'
+            : 'opacity-0 -translate-y-2 scale-95 pointer-events-none'
+        }`}
+      >
         {syncFeedback && (
-          <div className="bg-emerald-950/95 border-b border-emerald-800 px-4 py-1.5 text-xs text-emerald-200 flex items-center justify-between">
-            <span className="flex items-center gap-1.5 font-medium">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              {syncFeedback}
-            </span>
+          <div className="pointer-events-auto flex items-center gap-2 px-3.5 py-2 rounded-full bg-slate-900/95 backdrop-blur-md border border-emerald-500/40 text-emerald-300 text-xs shadow-2xl shadow-black/70 max-w-[90vw]">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span className="font-medium truncate">{syncFeedback}</span>
             <button
               onClick={() => setSyncFeedback(null)}
-              className="text-emerald-400 hover:text-emerald-200 p-1 text-xs cursor-pointer"
+              className="ml-1 p-0.5 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer shrink-0"
+              aria-label="Schließen"
             >
-              ✕
+              <X className="w-3 h-3" />
             </button>
           </div>
         )}
-      </header>
+      </div>
 
       {/* Main Content Area - Native Scrollable Container with Hidden Scrollbars */}
       <main className="flex-1 overflow-y-auto no-scrollbar overscroll-contain w-full max-w-4xl mx-auto p-3.5 sm:p-6">

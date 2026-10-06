@@ -19,7 +19,10 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
   activities,
   onSaveEntry,
 }) => {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = (() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  })();
   const [date, setDate] = useState(todayStr);
   const [startTime, setStartTime] = useState('08:30');
   const [endTime, setEndTime] = useState('12:00');

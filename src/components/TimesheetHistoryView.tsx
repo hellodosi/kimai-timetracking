@@ -206,9 +206,22 @@ export const TimesheetHistoryView: React.FC<TimesheetHistoryViewProps> = ({
                 )}
 
                 {entry.syncError && (
-                  <div className="text-[11px] text-rose-400 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3 shrink-0" />
-                    <span>Sync-Fehler: {entry.syncError}</span>
+                  <div className="p-2 rounded-lg bg-rose-950/40 border border-rose-800/50 text-[11px] text-rose-300 flex items-start justify-between gap-2 mt-1">
+                    <div className="flex items-start gap-1.5 min-w-0">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-400 mt-0.5" />
+                      <span className="break-words">
+                        <strong className="font-semibold text-rose-200">Sync-Fehler:</strong> {entry.syncError}
+                      </span>
+                    </div>
+                    {isKimaiConnected && (
+                      <button
+                        onClick={() => onSyncAll()}
+                        disabled={isSyncing}
+                        className="shrink-0 px-2 py-0.5 rounded bg-rose-800/60 hover:bg-rose-700 text-white text-[10px] font-medium transition cursor-pointer disabled:opacity-50 active:scale-95"
+                      >
+                        {isSyncing ? 'Synchronisiere...' : 'Wiederholen'}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
