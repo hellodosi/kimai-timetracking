@@ -16,9 +16,9 @@ import {
   EyeOff,
   ShieldOff,
   Eraser,
-  User,
 } from 'lucide-react';
 import { QRCodeScannerModal } from './QRCodeScannerModal';
+import { AppLogo } from './AppLogo';
 import { StorageService } from '../services/storage';
 import type { KimaiConfig, ServerStatus } from '../types/kimai';
 
@@ -48,7 +48,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClearOfflineCache,
 }) => {
   const [url, setUrl] = useState(config.baseUrl);
-  const [username, setUsername] = useState(config.username || '');
   const [apiToken, setApiToken] = useState(config.apiToken);
   const [showToken, setShowToken] = useState(false);
 
@@ -80,7 +79,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       const updated: KimaiConfig = {
         baseUrl: url.trim(),
         apiToken: apiToken.trim(),
-        username: username.trim() || undefined,
       };
       await onSaveConfig(updated);
       setSaveSuccess(true);
@@ -162,7 +160,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const exportJson = JSON.stringify(
     {
       url,
-      user: username.trim() || undefined,
       token: apiToken,
     },
     null,
@@ -180,9 +177,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       <div className="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl overflow-hidden my-auto text-slate-100 max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-800/50">
-          <div className="flex items-center gap-2">
-            <Settings className="w-5 h-5 text-sky-400" />
-            <h3 className="font-semibold text-white text-base">Einstellungen</h3>
+          <div className="flex items-center gap-3">
+            <AppLogo className="w-8 h-8 rounded-xl shadow-md shadow-sky-950 shrink-0" />
+            <div>
+              <h3 className="font-semibold text-white text-base leading-tight">Einstellungen</h3>
+              <p className="text-[11px] text-slate-400">Kimai Server-Verbindung &amp; Optionen</p>
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -251,21 +251,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://zeiterfassung.domain.de"
-                className="w-full text-xs py-2 px-3 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono focus:outline-none focus:border-sky-500"
-              />
-            </div>
-
-            {/* Username / Email */}
-            <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-sky-400" />
-                Benutzername oder E-Mail
-              </label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="max.mustermann"
                 className="w-full text-xs py-2 px-3 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono focus:outline-none focus:border-sky-500"
               />
             </div>
@@ -656,7 +641,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         onScanSuccess={(p) => {
           setUrl(p.url);
           if (p.token) setApiToken(p.token);
-          if (p.username) setUsername(p.username);
         }}
       />
     </div>

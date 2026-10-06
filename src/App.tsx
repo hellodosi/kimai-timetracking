@@ -24,6 +24,7 @@ import { MetadataView } from './components/MetadataView';
 import { SettingsModal } from './components/SettingsModal';
 import { ManualEntryModal } from './components/ManualEntryModal';
 import { PWAInstallButton } from './components/PWAInstallButton';
+import { AppLogo } from './components/AppLogo';
 import type {
   KimaiConfig,
   TimesheetEntry,
@@ -407,11 +408,7 @@ export default function App() {
         <div className="max-w-4xl mx-auto px-3.5 py-2.5 sm:px-4 sm:py-3 flex items-center justify-between gap-2">
           {/* Logo & Brand */}
           <div className="flex items-center gap-2.5 min-w-0">
-            <img
-              src={`${import.meta.env.BASE_URL}pwa-192x192.png`}
-              alt="Zeiterfassung"
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl shadow-md shadow-sky-950 shrink-0 object-contain"
-            />
+            <AppLogo className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl shadow-md shadow-sky-950 shrink-0" />
             <div className="truncate">
               <h1 className="font-bold text-sm sm:text-base text-white tracking-tight leading-none truncate">
                 Zeiterfassung

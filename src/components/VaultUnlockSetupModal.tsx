@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  LogIn,
   KeyRound,
   Globe,
   QrCode,
@@ -9,10 +8,12 @@ import {
   EyeOff,
   ShieldCheck,
   ArrowRight,
-  User,
+  ArrowLeft,
   Info,
+  PenLine,
 } from 'lucide-react';
 import { QRCodeScannerModal } from './QRCodeScannerModal';
+import { AppLogo } from './AppLogo';
 import { StorageService } from '../services/storage';
 import { KimaiApiService } from '../services/kimaiApi';
 import type { KimaiConfig } from '../types/kimai';
@@ -30,11 +31,11 @@ export const VaultUnlockSetupModal: React.FC<VaultUnlockSetupModalProps> = ({
   onUnlocked,
   onLoginSuccess,
 }) => {
-  // Login form state
+  // Login form state (Only Server URL and API Token)
   const [url, setUrl] = useState('');
-  const [username, setUsername] = useState('');
   const [apiToken, setApiToken] = useState('');
   const [showToken, setShowToken] = useState(false);
+  const [showManualInput, setShowManualInput] = useState(false);
 
   // Unlock state (if PIN was optionally enabled)
   const [unlockPin, setUnlockPin] = useState('');
@@ -71,7 +72,6 @@ export const VaultUnlockSetupModal: React.FC<VaultUnlockSetupModalProps> = ({
     setErrorMsg(null);
 
     const cleanUrl = url.trim();
-    const cleanUsername = username.trim();
     const cleanToken = apiToken.trim();
 
     if (!cleanUrl) {
@@ -88,7 +88,6 @@ export const VaultUnlockSetupModal: React.FC<VaultUnlockSetupModalProps> = ({
       const newConfig: KimaiConfig = {
         baseUrl: cleanUrl,
         apiToken: cleanToken,
-        username: cleanUsername || undefined,
       };
 
       // Test connection if online, but do not block user if offline
@@ -113,22 +112,25 @@ export const VaultUnlockSetupModal: React.FC<VaultUnlockSetupModalProps> = ({
     }
   };
 
-  const handleQRSuccess = (payload: { url: string; token: string; username?: string }) => {
+  const handleQRSuccess = (payload: { url: string; token: string }) => {
     setUrl(payload.url);
     if (payload.token) setApiToken(payload.token);
-    if (payload.username) setUsername(payload.username);
+    setShowManualInput(true);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 overflow-y-auto">
       <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl p-6 sm:p-8 text-slate-100 my-auto">
         {/* Top Header */}
-        <div className="text-center mb-6">
+        <div className="flex flex-col items-center text-center mb-6">
+          {/* Prominent App Logo */}
+          <div className="relative mb-3 group">
+            <div className="absolute -inset-1.5 rounded-3xl bg-gradient-to-tr from-sky-500 to-cyan-400 opacity-40 blur-md group-hover:opacity-70 transition duration-300"></div>
+            <AppLogo className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl shadow-xl shadow-sky-950" />
+          </div>
+
           {isConfigured && isPinSet ? (
             <>
-              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-sky-600 to-cyan-500 shadow-lg shadow-sky-500/20 text-white mb-3">
-                <KeyRound className="w-7 h-7" />
-              </div>
               <h2 className="text-xl font-bold text-white tracking-tight">App entsperren</h2>
               <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
                 Geben Sie Ihren Sicherheits-PIN ein, um Ihre Zeiterfassung zu öffnen.
@@ -136,15 +138,17 @@ export const VaultUnlockSetupModal: React.FC<VaultUnlockSetupModalProps> = ({
             </>
           ) : (
             <>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-950/80 border border-sky-800/60 text-sky-400 text-xs font-medium mb-3">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-950/80 border border-sky-800/60 text-sky-400 text-xs font-medium mb-2.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
                 <span>Sicherer lokaler Speicher</span>
               </div>
-              <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight mb-2">
+              <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight mb-1.5">
                 Verbinden Sie Ihre Kimai-Instanz
               </h2>
               <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
-                Geben Sie Ihre Zugangsdaten ein, um die mobile Zeiterfassung zu starten. Ihre Daten werden verschlüsselt gespeichert.
+                {showManualInput
+                  ? 'Geben Sie Ihre Zugangsdaten ein, um die mobile Zeiterfassung zu starten.'
+                  : 'Wählen Sie eine Methode, um Ihre Kimai-Instanz zu verbinden. Ihre Daten werden verschlüsselt gespeichert.'}
               </p>
             </>
           )}
@@ -199,22 +203,77 @@ export const VaultUnlockSetupModal: React.FC<VaultUnlockSetupModalProps> = ({
               </button>
             </div>
           </form>
-        ) : (
-          /* SETUP / LOGIN FORM MATCHING SPEC */
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
-            {/* Quick QR Code Scan Trigger */}
-            <div className="flex items-center justify-between p-2.5 rounded-xl bg-sky-950/40 border border-sky-800/40">
-              <div className="flex items-center gap-2 text-xs text-sky-300">
-                <QrCode className="w-4 h-4 text-sky-400" />
-                <span>Schnelleinrichtung via QR-Code:</span>
+        ) : !showManualInput ? (
+          /* TWO PROMINENT BUTTONS: QR CODE SCANNER & MANUAL ENTRY */
+          <div className="space-y-3">
+            {/* Big Button 1: QR Code Scanner */}
+            <button
+              type="button"
+              onClick={() => setIsScannerOpen(true)}
+              className="w-full p-4 rounded-2xl bg-gradient-to-r from-sky-600 to-sky-700 hover:from-sky-500 hover:to-sky-600 text-white font-medium shadow-lg shadow-sky-900/30 transition-all active:scale-[0.99] flex items-center gap-4 text-left group cursor-pointer border border-sky-400/20"
+            >
+              <div className="w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+                <QrCode className="w-7 h-7 text-white" />
               </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold flex items-center justify-between">
+                  <span>QR-Code scannen</span>
+                  <ArrowRight className="w-4 h-4 text-sky-200 group-hover:translate-x-1 transition" />
+                </div>
+                <p className="text-xs text-sky-100/80 mt-0.5 leading-snug">
+                  Schnell &amp; fehlerfrei über die Kimai-Weboberfläche verbinden
+                </p>
+              </div>
+            </button>
+
+            {/* Big Button 2: Manual Input */}
+            <button
+              type="button"
+              onClick={() => setShowManualInput(true)}
+              className="w-full p-4 rounded-2xl bg-slate-800/80 hover:bg-slate-800 text-white font-medium border border-slate-700/80 hover:border-slate-600 shadow-md transition-all active:scale-[0.99] flex items-center gap-4 text-left group cursor-pointer"
+            >
+              <div className="w-12 h-12 rounded-xl bg-slate-700/50 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+                <PenLine className="w-6 h-6 text-sky-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold flex items-center justify-between">
+                  <span>Manuelle Eingabe</span>
+                  <ArrowRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 transition" />
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5 leading-snug">
+                  Server-URL und API-Passwort / Token von Hand eingeben
+                </p>
+              </div>
+            </button>
+
+            {/* PWA Tip Card */}
+            <div className="mt-5 p-3.5 rounded-xl bg-sky-950/40 border border-sky-800/40 flex items-start gap-2.5 text-xs text-sky-300">
+              <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+              <span className="leading-relaxed">
+                Tipp: Sie können die App zum Startbildschirm hinzufügen (PWA), um sie wie eine native App auch offline zu nutzen.
+              </span>
+            </div>
+          </div>
+        ) : (
+          /* MANUAL SETUP FORM */
+          <form onSubmit={handleLoginSubmit} className="space-y-4">
+            <div className="flex items-center justify-between mb-1">
+              <button
+                type="button"
+                onClick={() => setShowManualInput(false)}
+                className="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 cursor-pointer py-1 transition"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Zurück zur Auswahl</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setIsScannerOpen(true)}
-                className="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium shadow-sm transition active:scale-95 flex items-center gap-1 cursor-pointer"
+                className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 cursor-pointer py-1 transition"
               >
                 <QrCode className="w-3.5 h-3.5" />
-                Scannen
+                <span>QR-Code scannen</span>
               </button>
             </div>
 
@@ -236,22 +295,7 @@ export const VaultUnlockSetupModal: React.FC<VaultUnlockSetupModalProps> = ({
               </span>
             </div>
 
-            {/* Username / Email */}
-            <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-sky-400" />
-                Benutzername oder E-Mail
-              </label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="max.mustermann"
-                className="w-full text-xs py-2.5 px-3.5 rounded-xl bg-slate-950 border border-slate-700 text-white placeholder:text-slate-600 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition font-mono"
-              />
-            </div>
-
-            {/* API Password / Token */}
+            {/* API Password / Token (No username needed) */}
             <div>
               <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
