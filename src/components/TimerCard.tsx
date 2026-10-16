@@ -34,7 +34,6 @@ export const TimerCard: React.FC<TimerCardProps> = ({
   const [selectedActivityId, setSelectedActivityId] = useState<number | ''>('');
   const [description, setDescription] = useState('');
   const [tagsInput, setTagsInput] = useState('');
-  const [billable, setBillable] = useState(true);
 
   // Filter activities by project if project defines activities
   const filteredActivities = activities.filter((act) => {
@@ -109,7 +108,7 @@ export const TimerCard: React.FC<TimerCardProps> = ({
       activityId: Number(selectedActivityId),
       description,
       tags,
-      billable,
+      billable: true,
     });
 
     setDescription('');
@@ -289,33 +288,19 @@ export const TimerCard: React.FC<TimerCardProps> = ({
             />
           </div>
 
-          {/* Tags & Billable */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            <div>
-              <label className="block text-[11px] font-medium text-slate-400 mb-1 flex items-center gap-1">
-                <Tag className="w-3 h-3 text-slate-500" />
-                Tags (kommagetrennt)
-              </label>
-              <input
-                type="text"
-                value={tagsInput}
-                onChange={(e) => setTagsInput(e.target.value)}
-                placeholder="dev, meeting, intern"
-                className="w-full py-2 px-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-sky-500 font-mono"
-              />
-            </div>
-
-            <div className="flex items-center pt-5 sm:pt-4">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={billable}
-                  onChange={(e) => setBillable(e.target.checked)}
-                  className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-slate-700 bg-slate-950"
-                />
-                <span className="text-xs text-slate-300">Abrechenbar (billable)</span>
-              </label>
-            </div>
+          {/* Tags */}
+          <div className="pt-1">
+            <label className="block text-[11px] font-medium text-slate-400 mb-1 flex items-center gap-1">
+              <Tag className="w-3 h-3 text-slate-500" />
+              Tags (optional, kommagetrennt)
+            </label>
+            <input
+              type="text"
+              value={tagsInput}
+              onChange={(e) => setTagsInput(e.target.value)}
+              placeholder="dev, meeting, intern"
+              className="w-full py-2 px-3 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder:text-slate-600 focus:outline-none focus:border-sky-500 font-mono"
+            />
           </div>
 
           {/* Big Start Button */}

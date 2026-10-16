@@ -230,18 +230,47 @@ export class KimaiApiService {
       begin: formattedBegin,
       project: Number(entry.project),
       activity: Number(entry.activity),
-      description: entry.description || '',
-      billable: entry.billable ?? true,
     };
+    if (entry.description && entry.description.trim()) {
+      payload.description = entry.description.trim();
+    }
     if (entry.tags && entry.tags.length > 0) {
-      payload.tags = Array.isArray(entry.tags) ? entry.tags.join(',') : String(entry.tags);
+      const tagsStr = Array.isArray(entry.tags) ? entry.tags.join(',') : String(entry.tags);
+      if (tagsStr.trim()) {
+        payload.tags = tagsStr.trim();
+      }
     }
 
-    const res = await fetch(`${baseUrl}/api/timesheets`, {
+    let res = await fetch(`${baseUrl}/api/timesheets`, {
       method: 'POST',
       headers: this.getHeaders(config),
       body: JSON.stringify(payload),
     });
+
+    // If server rejects with "extra fields", retry with minimal payload (begin, project, activity)
+    if (!res.ok && res.status === 400) {
+      try {
+        const errJson = await res.clone().json();
+        const errText = JSON.stringify(errJson);
+        if (errText.includes('extra fields') || errText.includes('extra_fields')) {
+          const minimalPayload: Record<string, unknown> = {
+            begin: formattedBegin,
+            project: Number(entry.project),
+            activity: Number(entry.activity),
+          };
+          const retryRes = await fetch(`${baseUrl}/api/timesheets`, {
+            method: 'POST',
+            headers: this.getHeaders(config),
+            body: JSON.stringify(minimalPayload),
+          });
+          if (retryRes.ok) {
+            res = retryRes;
+          }
+        }
+      } catch {
+        // ignore retry error
+      }
+    }
 
     if (!res.ok) {
       let errMsg = `HTTP ${res.status}`;
@@ -270,6 +299,21 @@ export class KimaiApiService {
     });
     if (!res.ok) {
       throw new Error(`Fehler beim Abrufen aktiver Timer (HTTP ${res.status})`);
+    }
+    return await res.json();
+  }
+
+  /**
+   * Fetch timesheet records for current user from Kimai server
+   */
+  static async fetchTimesheets(config: KimaiConfig, size = 100): Promise<any[]> {
+    const baseUrl = this.cleanUrl(config.baseUrl);
+    const res = await fetch(`${baseUrl}/api/timesheets?size=${size}&order=DESC&orderBy=begin`, {
+      method: 'GET',
+      headers: this.getHeaders(config),
+    });
+    if (!res.ok) {
+      throw new Error(`Fehler beim Laden der Zeiteinträge (HTTP ${res.status})`);
     }
     return await res.json();
   }
@@ -332,18 +376,51 @@ export class KimaiApiService {
       end: formattedEnd,
       project: Number(entry.projectId),
       activity: Number(entry.activityId),
-      description: entry.description || '',
-      billable: Boolean(entry.billable ?? true),
     };
+    if (entry.description && entry.description.trim()) {
+      payload.description = entry.description.trim();
+    }
     if (entry.tags && entry.tags.length > 0) {
-      payload.tags = Array.isArray(entry.tags) ? entry.tags.join(',') : String(entry.tags);
+      const tagsStr = Array.isArray(entry.tags) ? entry.tags.join(',') : String(entry.tags);
+      if (tagsStr.trim()) {
+        payload.tags = tagsStr.trim();
+      }
     }
 
-    const res = await fetch(`${baseUrl}/api/timesheets`, {
+    let res = await fetch(`${baseUrl}/api/timesheets`, {
       method: 'POST',
       headers: this.getHeaders(config),
       body: JSON.stringify(payload),
     });
+
+    // If server rejects with "extra fields", retry with strictly minimal payload
+    if (!res.ok && res.status === 400) {
+      try {
+        const errJson = await res.clone().json();
+        const errText = JSON.stringify(errJson);
+        if (errText.includes('extra fields') || errText.includes('extra_fields')) {
+          const minimalPayload: Record<string, unknown> = {
+            begin: formattedBegin,
+            end: formattedEnd,
+            project: Number(entry.projectId),
+            activity: Number(entry.activityId),
+          };
+          if (entry.description && entry.description.trim()) {
+            minimalPayload.description = entry.description.trim();
+          }
+          const retryRes = await fetch(`${baseUrl}/api/timesheets`, {
+            method: 'POST',
+            headers: this.getHeaders(config),
+            body: JSON.stringify(minimalPayload),
+          });
+          if (retryRes.ok) {
+            res = retryRes;
+          }
+        }
+      } catch {
+        // ignore retry error
+      }
+    }
 
     if (!res.ok) {
       let errMsg = `HTTP ${res.status}`;

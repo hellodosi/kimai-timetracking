@@ -109,20 +109,31 @@ export const TimesheetHistoryView: React.FC<TimesheetHistoryViewProps> = ({
         <div className="flex items-center gap-2">
           <button
             onClick={onOpenManualModal}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-medium transition border border-slate-700"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-medium transition border border-slate-700 cursor-pointer"
           >
             <Plus className="w-4 h-4 text-sky-400" />
             <span>Manuell eintragen</span>
           </button>
 
-          {pendingCount > 0 && isKimaiConnected && (
+          {isKimaiConnected && (
             <button
               onClick={onSyncAll}
               disabled={isSyncing}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white text-xs font-medium shadow transition active:scale-95"
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition active:scale-95 cursor-pointer disabled:opacity-50 ${
+                pendingCount > 0
+                  ? 'bg-sky-600 hover:bg-sky-500 text-white shadow shadow-sky-600/20'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+              }`}
+              title="Vom Server aktualisieren & synchronisieren"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>{isSyncing ? 'Synchronisiere...' : `Sync (${pendingCount})`}</span>
+              <span>
+                {isSyncing
+                  ? 'Aktualisiere...'
+                  : pendingCount > 0
+                  ? `Sync (${pendingCount})`
+                  : 'Aktualisieren'}
+              </span>
             </button>
           )}
         </div>

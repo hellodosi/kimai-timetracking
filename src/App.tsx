@@ -243,6 +243,113 @@ export default function App() {
     [config, syncActiveTimerFromKimai]
   );
 
+  // Fetch full timesheet history from Kimai server (e.g. entries made on PC)
+  const fetchRemoteTimesheets = useCallback(
+    async (cfgToUse?: KimaiConfig, metaToUse?: CachedMetadata) => {
+      const cfg = cfgToUse || config;
+      if (!cfg || !cfg.baseUrl) return;
+      const currentMeta = metaToUse || metadata;
+
+      setIsSyncing(true);
+      try {
+        const remoteItems = await KimaiApiService.fetchTimesheets(cfg, 100);
+        if (Array.isArray(remoteItems)) {
+          setTimesheets((prev) => {
+            // Keep all local pending/failed/syncing entries that haven't been pushed yet
+            const pendingOrFailed = prev.filter(
+              (t) => t.syncStatus === 'pending' || t.syncStatus === 'failed' || t.syncStatus === 'syncing'
+            );
+
+            // Map remote items
+            const mappedRemote: TimesheetEntry[] = remoteItems.map((item: any) => {
+              let projectId = 0;
+              let projectName = 'Projekt';
+              let customerName = '';
+
+              if (typeof item.project === 'object' && item.project) {
+                projectId = item.project.id;
+                projectName = item.project.name || `Projekt #${projectId}`;
+                if (item.project.customer && typeof item.project.customer === 'object') {
+                  customerName = item.project.customer.name || '';
+                }
+              } else if (typeof item.project === 'number') {
+                projectId = item.project;
+                const p = currentMeta.projects.find((proj) => proj.id === projectId);
+                if (p) {
+                  projectName = p.name;
+                  const c = currentMeta.customers.find((cust) => cust.id === (typeof p.customer === 'object' ? p.customer.id : p.customer));
+                  if (c) customerName = c.name;
+                }
+              }
+
+              let activityId = 0;
+              let activityName = 'Tätigkeit';
+              if (typeof item.activity === 'object' && item.activity) {
+                activityId = item.activity.id;
+                activityName = item.activity.name || `Tätigkeit #${activityId}`;
+              } else if (typeof item.activity === 'number') {
+                activityId = item.activity;
+                const a = currentMeta.activities.find((act) => act.id === activityId);
+                if (a) activityName = a.name;
+              }
+
+              const tags: string[] = [];
+              if (Array.isArray(item.tags)) {
+                for (const t of item.tags) {
+                  if (typeof t === 'string') tags.push(t);
+                  else if (t && typeof t === 'object' && t.name) tags.push(t.name);
+                }
+              } else if (typeof item.tags === 'string' && item.tags.trim()) {
+                tags.push(...item.tags.split(',').map((s: string) => s.trim()).filter(Boolean));
+              }
+
+              const existingMatch = prev.find((t) => t.remoteId === item.id);
+
+              return {
+                localId: existingMatch ? existingMatch.localId : `remote_${item.id}`,
+                remoteId: item.id,
+                begin: formatKimaiDateTime(item.begin),
+                end: item.end ? formatKimaiDateTime(item.end) : null,
+                projectId,
+                projectName,
+                customerName,
+                activityId,
+                activityName,
+                description: item.description || '',
+                tags,
+                billable: Boolean(item.billable),
+                syncStatus: 'synced',
+                createdAt: new Date(item.begin).getTime(),
+                updatedAt: item.end ? new Date(item.end).getTime() : new Date(item.begin).getTime(),
+              };
+            });
+
+            // Combine pending/failed with remote items, avoiding duplicates
+            const combined = [...pendingOrFailed];
+            for (const rem of mappedRemote) {
+              if (!combined.some((c) => c.remoteId === rem.remoteId)) {
+                combined.push(rem);
+              }
+            }
+
+            // Sort newest first
+            combined.sort((a, b) => new Date(b.begin).getTime() - new Date(a.begin).getTime());
+
+            // Persist locally for offline access
+            StorageService.saveTimesheets(combined, activePin).catch(console.error);
+
+            return combined;
+          });
+        }
+      } catch (err) {
+        console.warn('Could not fetch timesheets from Kimai:', err);
+      } finally {
+        setIsSyncing(false);
+      }
+    },
+    [config, metadata, activePin]
+  );
+
   // Sync pending timesheets with Kimai API
   const syncPendingTimesheets = useCallback(
     async (currentTimesheets?: TimesheetEntry[], currentConfig?: KimaiConfig) => {
@@ -254,7 +361,11 @@ export default function App() {
       const pending = targetTimesheets.filter(
         (t) => t.syncStatus === 'pending' || t.syncStatus === 'failed'
       );
-      if (pending.length === 0) return;
+      if (pending.length === 0) {
+        // If nothing is pending, refresh full history from Kimai
+        await fetchRemoteTimesheets(targetConfig);
+        return;
+      }
 
       setIsSyncing(true);
       setSyncFeedback(null);
@@ -297,6 +408,7 @@ export default function App() {
 
       setTimesheets(updated);
       await StorageService.saveTimesheets(updated, activePin);
+      await fetchRemoteTimesheets(targetConfig);
       setIsSyncing(false);
 
       if (syncedCount > 0) {
@@ -306,7 +418,7 @@ export default function App() {
         setTimeout(() => setSyncFeedback(null), 4000);
       }
     },
-    [config, timesheets, isSyncing, activePin]
+    [config, timesheets, isSyncing, activePin, fetchRemoteTimesheets]
   );
 
   // Fetch / refresh metadata from Kimai
@@ -373,13 +485,14 @@ export default function App() {
               await refreshMetadataFromKimai(loadedConfig);
             }
             await syncActiveTimerFromKimai(loadedConfig, loadedMeta);
+            await fetchRemoteTimesheets(loadedConfig, loadedMeta);
           }
         }
       } catch (err) {
         console.error('Failed to load local app data:', err);
       }
     },
-    [checkKimaiServer, syncPendingTimesheets, refreshMetadataFromKimai, syncActiveTimerFromKimai]
+    [checkKimaiServer, syncPendingTimesheets, refreshMetadataFromKimai, syncActiveTimerFromKimai, fetchRemoteTimesheets]
   );
 
   // Auto-load data if configured and not PIN protected
@@ -388,6 +501,13 @@ export default function App() {
       loadAppData();
     }
   }, [isConfigured, isPinSet, config, loadAppData]);
+
+  // When switching to the 'timesheets' tab, auto-refresh entries from Kimai if online
+  useEffect(() => {
+    if (activeTab === 'timesheets' && serverStatus.isReachable && config) {
+      fetchRemoteTimesheets();
+    }
+  }, [activeTab, serverStatus.isReachable, config, fetchRemoteTimesheets]);
 
   // Handle successful login (Step 1)
   const handleLoginSuccess = async (newConfig: KimaiConfig) => {
@@ -399,6 +519,7 @@ export default function App() {
     const status = await checkKimaiServer(newConfig);
     if (status?.isReachable) {
       await refreshMetadataFromKimai(newConfig);
+      await fetchRemoteTimesheets(newConfig);
     }
 
     // Step 2: Ask user optionally if they want to protect their app with a PIN
@@ -707,24 +828,6 @@ export default function App() {
               onStartTimer={handleStartTimer}
               onStopTimer={handleStopTimer}
             />
-
-            {/* Quick Summary Pill */}
-            <div className="rounded-2xl bg-slate-900/50 border border-slate-800/80 p-4 space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-medium text-slate-300 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-sky-400" />
-                  Synchronisation
-                </span>
-                <span className="text-slate-400 font-mono text-[11px]">
-                  {pendingSyncCount > 0
-                    ? `${pendingSyncCount} ausstehend`
-                    : 'Alle Zeiten aktuell'}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Zeiten werden lokal vorgehalten und automatisch synchronisiert, sobald Kimai erreichbar ist.
-              </p>
-            </div>
           </div>
         )}
 
